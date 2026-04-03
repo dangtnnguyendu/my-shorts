@@ -3,92 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Shorts Clone</title>
+    <title>TikTok Pro - Master Control</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="danh_sach.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { width: 100vw; height: 100vh; background-color: #000; overflow: hidden; font-family: sans-serif; color: white; }
-        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; display: flex; justify-content: center; align-items: center; z-index: 100; cursor: pointer; }
-        #start-btn { padding: 15px 30px; font-size: 18px; border-radius: 25px; background: #ff0000; color: white; border: none; font-weight: bold; }
-        #video-container { position: relative; width: 100%; height: 100%; display: none; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; font-family: "Roboto", Arial, sans-serif; }
+        .app-container { position: relative; width: 100%; height: 100%; overflow: hidden; }
+        
+        /* Hiệu ứng chuyển động mượt */
+        #wrapper { position: absolute; width: 100%; height: 100%; transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
         iframe { width: 100%; height: 100%; pointer-events: none; border: none; }
         #touch-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         
-        /* Giao diện tên kênh */
-        #info-overlay { position: absolute; bottom: 30px; left: 20px; z-index: 20; pointer-events: none; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
-        .channel-name { font-weight: bold; font-size: 20px; margin-bottom: 5px; color: #fff; }
+        .loading-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 4px solid #fff; border-top: 4px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; z-index: 5; display: none; }
+        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+        
+        /* Menu Giao diện */
+        #hiddenTrigger { position: absolute; top: 0; right: 0; width: 150px; height: 150px; z-index: 9999; background: transparent; cursor: pointer; }
+        #visibleControls { display: none; position: absolute; top: 20px; right: 20px; z-index: 9999; background-color: #212121; border-radius: 12px; padding: 8px 0; min-width: 240px; flex-direction: column; box-shadow: 0 4px 32px rgba(0,0,0,0.6); }
+        .yt-header { color: #f1f1f1; font-size: 16px; font-weight: 600; padding: 10px 20px 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px; }
+        .yt-item { background: transparent; color: #f1f1f1; border: none; padding: 12px 20px; font-size: 15px; text-align: left; display: flex; align-items: center; cursor: pointer; width: 100%; transition: background-color 0.2s ease; }
+        .yt-item:active { background-color: rgba(255,255,255,0.1); }
+        .yt-icon { width: 24px; height: 24px; margin-right: 18px; fill: #f1f1f1; }
+        
+        #infoPanel { display: none; position: absolute; top: 65px; right: 270px; z-index: 9998; background: #212121; color: #fff; padding: 15px; border-radius: 8px; max-width: 250px; font-size: 14px; line-height: 1.6; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        
+        .hint-text { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 20px; color: rgba(255,255,255,0.9); font-size: 12px; z-index: 9999; pointer-events: none; animation: fadeOut 5s forwards; }
+        @keyframes fadeOut { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+        /* Tên Kênh Đang Phát */
+        #channel-display { position: absolute; bottom: 30px; left: 20px; z-index: 20; color: white; font-size: 22px; font-weight: bold; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; }
+        
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; display: flex; justify-content: center; align-items: center; z-index: 10000; }
+        #start-btn { padding: 15px 30px; font-size: 18px; border-radius: 25px; background: #ff0000; color: white; border: none; font-weight: bold; }
     </style>
 </head>
 <body>
-
     <div id="start-screen" onclick="startApp()">
         <button id="start-btn">Chạm để Bắt Đầu Xem</button>
     </div>
 
-    <div id="video-container">
-        <iframe id="yt-player" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-        <div id="touch-layer"></div>
-        <div id="info-overlay">
-            <div class="channel-name" id="ui-channel">@Channel</div>
-            <div style="font-size: 14px; opacity: 0.8;">Vuốt lên để xem random ⬆️</div>
-        </div>
-    </div>
+    <div id="app" class="app-container">
+        <div class="hint-text">💡 Chạm góc trên bên PHẢI để mở Menu</div>
+        
+        <div id="channel-display">@Channel</div>
 
+        <div id="hiddenTrigger" onclick="showControls()"></div>
+
+        <div id="visibleControls">
+            <div class="yt-header">Menu điều khiển</div>
+            <button class="yt-item" onclick="toggleInfo()">
+                <svg class="yt-icon" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                <span>Thông tin Video</span>
+            </button>
+            <button class="yt-item" onclick="hideControls()">
+                <svg class="yt-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                <span>Đóng menu</span>
+            </button>
+        </div>
+
+        <div id="infoPanel">
+            <div id="infoNguon"></div>
+            <div id="infoId"></div>
+        </div>
+
+        <div id="loading" class="loading-dot"></div>
+        
+        <div id="wrapper">
+            <iframe id="yt-player" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
+        <div id="touch-layer"></div>
+    </div>
+    
     <script>
-        const videoContainer = document.getElementById('video-container');
-        const startScreen = document.getElementById('start-screen');
+        const wrapper = document.getElementById('wrapper');
         const ytPlayer = document.getElementById('yt-player');
-        const touchLayer = document.getElementById('touch-layer');
-        const uiChannel = document.getElementById('ui-channel');
+        const channelDisplay = document.getElementById('channel-display');
+        const loading = document.getElementById('loading');
         
         let daXem = [];
+        let currentKenh = "";
+        let currentId = "";
 
         function startApp() {
-            startScreen.style.display = 'none';
-            videoContainer.style.display = 'block';
-            nextVideo();
+            document.getElementById('start-screen').style.display = 'none';
+            changeVideo(1); // Phát video đầu tiên
         }
 
-        function nextVideo() {
-            // Lấy danh sách các tên kênh (["MrBeast", "Zhong", ...])
+        // =====================================
+        // LOGIC LẤY VIDEO TỪ KHO (Không cần API)
+        // =====================================
+        function layVideoTiepTheo() {
             const danhSachKenh = Object.keys(KHO_VIDEO);
-            if (danhSachKenh.length === 0) return;
+            if (danhSachKenh.length === 0) return null;
 
-            // 1. Chọn ngẫu nhiên 1 Kênh
             const randomKenh = danhSachKenh[Math.floor(Math.random() * danhSachKenh.length)];
-            const listVideoCuaKenh = KHO_VIDEO[randomKenh];
+            const listVideo = KHO_VIDEO[randomKenh];
 
-            // 2. Lọc các video chưa xem của kênh đó
-            let videoChuaXem = listVideoCuaKenh.filter(id => !daXem.includes(id));
-            
+            let videoChuaXem = listVideo.filter(id => !daXem.includes(id));
             if (videoChuaXem.length === 0) {
-                // Nếu đã cày nát kênh này rồi thì reset lịch sử xem
-                daXem = [];
-                videoChuaXem = listVideoCuaKenh;
+                daXem = []; // Xem hết thì reset
+                videoChuaXem = listVideo;
             }
 
-            // 3. Chọn ngẫu nhiên 1 Video
             const randomId = videoChuaXem[Math.floor(Math.random() * videoChuaXem.length)];
             daXem.push(randomId);
-
-            // Cập nhật giao diện và phát video
-            uiChannel.innerText = '@' + randomKenh;
-            ytPlayer.src = `https://www.youtube.com/embed/${randomId}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${randomId}&playsinline=1`;
+            return { kenh: randomKenh, id: randomId };
         }
 
-        // --- XỬ LÝ VUỐT (SWIPE) ---
-        let startY = 0; let endY = 0;
-        touchLayer.addEventListener('touchstart', e => { startY = e.changedTouches[0].screenY; });
-        touchLayer.addEventListener('touchend', e => { endY = e.changedTouches[0].screenY; handleSwipe(); });
-        
-        let isMouseDown = false;
-        touchLayer.addEventListener('mousedown', e => { isMouseDown = true; startY = e.screenY; });
-        touchLayer.addEventListener('mouseup', e => { if (!isMouseDown) return; isMouseDown = false; endY = e.screenY; handleSwipe(); });
+        // =====================================
+        // HIỆU ỨNG VUỐT CHUYỂN BÀI
+        // =====================================
+        function changeVideo(direction) {
+            const nextData = layVideoTiepTheo();
+            if (!nextData) return;
 
-        function handleSwipe() {
-            const swipeDistance = startY - endY;
-            if (swipeDistance > 50 || swipeDistance < -50) {
-                nextVideo();
+            currentKenh = nextData.kenh;
+            currentId = nextData.id;
+            hideControls();
+
+            // Hiệu ứng trượt màn hình lên/xuống
+            wrapper.style.transform = direction === 1 ? 'translateY(-100%)' : 'translateY(100%)';
+            loading.style.display = 'block';
+            
+            setTimeout(() => {
+                // Đổi link Iframe
+                channelDisplay.innerText = '@' + currentKenh;
+                ytPlayer.src = `https://www.youtube.com/embed/${currentId}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${currentId}&playsinline=1`;
+                
+                // Trả màn hình về giữa ngay lập tức (không hiệu ứng)
+                wrapper.style.transition = 'none'; 
+                wrapper.style.transform = 'translateY(0)'; 
+                
+                // Mở lại hiệu ứng cho lần vuốt sau
+                setTimeout(() => { 
+                    wrapper.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)'; 
+                    loading.style.display = 'none';
+                }, 50); 
+            }, 400); // Đợi 0.4s cho hiệu ứng trượt xong
+        }
+
+        // =====================================
+        // CẤU HÌNH VUỐT BẰNG HAMMER.JS
+        // =====================================
+        const mc = new Hammer(document.getElementById('touch-layer'));
+        mc.get('swipe').set({ direction: Hammer.DIRECTION_VERTICAL, threshold: 10, velocity: 0.3 });
+        
+        mc.on("swipeup", () => changeVideo(1));
+        mc.on("swipedown", () => changeVideo(-1));
+
+        // =====================================
+        // UI ĐIỀU KHIỂN
+        // =====================================
+        function showControls() {
+            document.getElementById('hiddenTrigger').style.display = 'none'; 
+            document.getElementById('visibleControls').style.display = 'flex'; 
+        }
+
+        function hideControls() {
+            document.getElementById('visibleControls').style.display = 'none'; 
+            document.getElementById('infoPanel').style.display = 'none'; 
+            document.getElementById('hiddenTrigger').style.display = 'block'; 
+        }
+
+        function toggleInfo() {
+            const panel = document.getElementById('infoPanel');
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+            } else {
+                document.getElementById('infoNguon').innerHTML = `<b>🎥 Kênh:</b> ${currentKenh}`;
+                document.getElementById('infoId').innerHTML = `<b>🔑 ID Video:</b> ${currentId}`;
+                panel.style.display = 'block';
             }
         }
     </script>
