@@ -10,12 +10,11 @@
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; font-family: "Roboto", Arial, sans-serif; }
         .app-container { position: relative; width: 100%; height: 100%; overflow: hidden; }
         
-        /* Hiệu ứng chuyển động mượt */
         #wrapper { position: absolute; width: 100%; height: 100%; transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
-        iframe { width: 100%; height: 100%; pointer-events: none; border: none; }
+        #yt-player { width: 100%; height: 100%; border: none; }
         #touch-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         
-        .loading-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 4px solid #fff; border-top: 4px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; z-index: 5; display: none; }
+        .loading-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 4px solid #fff; border-top: 4px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; z-index: 15; display: none; }
         @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
         
         /* Menu Giao diện */
@@ -28,10 +27,10 @@
         
         #infoPanel { display: none; position: absolute; top: 65px; right: 270px; z-index: 9998; background: #212121; color: #fff; padding: 15px; border-radius: 8px; max-width: 250px; font-size: 14px; line-height: 1.6; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         
-        .hint-text { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 20px; color: rgba(255,255,255,0.9); font-size: 12px; z-index: 9999; pointer-events: none; animation: fadeOut 5s forwards; }
-        @keyframes fadeOut { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+        /* Biểu tượng Play/Pause giữa màn hình */
+        #state-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); color: white; font-size: 60px; z-index: 12; pointer-events: none; opacity: 0; transition: all 0.2s ease; }
+        .show-icon { transform: translate(-50%, -50%) scale(1.2) !important; opacity: 0.8 !important; }
 
-        /* Tên Kênh Đang Phát */
         #channel-display { position: absolute; bottom: 30px; left: 20px; z-index: 20; color: white; font-size: 22px; font-weight: bold; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; }
         
         #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; display: flex; justify-content: center; align-items: center; z-index: 10000; }
@@ -44,14 +43,17 @@
     </div>
 
     <div id="app" class="app-container">
-        <div class="hint-text">💡 Chạm góc trên bên PHẢI để mở Menu</div>
-        
+        <div id="state-icon">▶</div>
         <div id="channel-display">@Channel</div>
 
         <div id="hiddenTrigger" onclick="showControls()"></div>
 
         <div id="visibleControls">
             <div class="yt-header">Menu điều khiển</div>
+            <button class="yt-item" onclick="togglePlayPause()">
+                <svg class="yt-icon" viewBox="0 0 24 24"><path id="play-pause-path" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                <span id="play-pause-text">Tạm dừng</span>
+            </button>
             <button class="yt-item" onclick="toggleInfo()">
                 <svg class="yt-icon" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
                 <span>Thông tin Video</span>
@@ -70,91 +72,143 @@
         <div id="loading" class="loading-dot"></div>
         
         <div id="wrapper">
-            <iframe id="yt-player" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+            <div id="yt-player"></div>
         </div>
         <div id="touch-layer"></div>
     </div>
     
+    <script src="https://www.youtube.com/iframe_api"></script>
     <script>
         const wrapper = document.getElementById('wrapper');
-        const ytPlayer = document.getElementById('yt-player');
         const channelDisplay = document.getElementById('channel-display');
         const loading = document.getElementById('loading');
+        const stateIcon = document.getElementById('state-icon');
+        const ppPath = document.getElementById('play-pause-path');
+        const ppText = document.getElementById('play-pause-text');
         
+        let player;
         let daXem = [];
         let currentKenh = "";
         let currentId = "";
+        let isPlayerReady = false;
+
+        // Khởi tạo Youtube Player
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '100%',
+                width: '100%',
+                videoId: '',
+                playerVars: {
+                    'autoplay': 1,
+                    'controls': 0,
+                    'modestbranding': 1,
+                    'rel': 0,
+                    'loop': 1,
+                    'playsinline': 1,
+                    'enablejsapi': 1
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            isPlayerReady = true;
+        }
+
+        function onPlayerStateChange(event) {
+            // Nếu video kết thúc (state = 0), tự chuyển bài
+            if (event.data === YT.PlayerState.ENDED) {
+                changeVideo(1);
+            }
+            // Cập nhật UI nút trong menu
+            if (event.data === YT.PlayerState.PLAYING) {
+                ppPath.setAttribute("d", "M6 19h4V5H6v14zm8-14v14h4V5h-4z");
+                ppText.innerText = "Tạm dừng";
+            } else {
+                ppPath.setAttribute("d", "M8 5v14l11-7z");
+                ppText.innerText = "Phát video";
+            }
+        }
 
         function startApp() {
             document.getElementById('start-screen').style.display = 'none';
-            changeVideo(1); // Phát video đầu tiên
+            if (isPlayerReady) changeVideo(1);
+            else setTimeout(startApp, 500);
         }
 
-        // =====================================
-        // LOGIC LẤY VIDEO TỪ KHO (Không cần API)
-        // =====================================
         function layVideoTiepTheo() {
             const danhSachKenh = Object.keys(KHO_VIDEO);
             if (danhSachKenh.length === 0) return null;
-
             const randomKenh = danhSachKenh[Math.floor(Math.random() * danhSachKenh.length)];
             const listVideo = KHO_VIDEO[randomKenh];
-
             let videoChuaXem = listVideo.filter(id => !daXem.includes(id));
-            if (videoChuaXem.length === 0) {
-                daXem = []; // Xem hết thì reset
-                videoChuaXem = listVideo;
-            }
-
+            if (videoChuaXem.length === 0) { daXem = []; videoChuaXem = listVideo; }
             const randomId = videoChuaXem[Math.floor(Math.random() * videoChuaXem.length)];
             daXem.push(randomId);
             return { kenh: randomKenh, id: randomId };
         }
 
-        // =====================================
-        // HIỆU ỨNG VUỐT CHUYỂN BÀI
-        // =====================================
         function changeVideo(direction) {
             const nextData = layVideoTiepTheo();
             if (!nextData) return;
-
             currentKenh = nextData.kenh;
             currentId = nextData.id;
             hideControls();
 
-            // Hiệu ứng trượt màn hình lên/xuống
             wrapper.style.transform = direction === 1 ? 'translateY(-100%)' : 'translateY(100%)';
             loading.style.display = 'block';
             
             setTimeout(() => {
-                // Đổi link Iframe
                 channelDisplay.innerText = '@' + currentKenh;
-                ytPlayer.src = `https://www.youtube.com/embed/${currentId}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${currentId}&playsinline=1`;
+                // Sử dụng hàm của API để load video
+                player.loadVideoById({
+                    videoId: currentId,
+                    suggestedQuality: 'hd720'
+                });
                 
-                // Trả màn hình về giữa ngay lập tức (không hiệu ứng)
                 wrapper.style.transition = 'none'; 
                 wrapper.style.transform = 'translateY(0)'; 
                 
-                // Mở lại hiệu ứng cho lần vuốt sau
                 setTimeout(() => { 
                     wrapper.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)'; 
                     loading.style.display = 'none';
                 }, 50); 
-            }, 400); // Đợi 0.4s cho hiệu ứng trượt xong
+            }, 400);
         }
 
-        // =====================================
-        // CẤU HÌNH VUỐT BẰNG HAMMER.JS
-        // =====================================
-        const mc = new Hammer(document.getElementById('touch-layer'));
+        // Hàm Tạm dừng / Phát
+        function togglePlayPause() {
+            if (!player) return;
+            const state = player.getPlayerState();
+            if (state === YT.PlayerState.PLAYING) {
+                player.pauseVideo();
+                showStateIcon("⏸");
+            } else {
+                player.playVideo();
+                showStateIcon("▶");
+            }
+        }
+
+        function showStateIcon(char) {
+            stateIcon.innerText = char;
+            stateIcon.classList.add('show-icon');
+            setTimeout(() => stateIcon.classList.remove('show-icon'), 500);
+        }
+
+        // Cấu hình Hammer.js
+        const touchLayer = document.getElementById('touch-layer');
+        const mc = new Hammer(touchLayer);
         mc.get('swipe').set({ direction: Hammer.DIRECTION_VERTICAL, threshold: 10, velocity: 0.3 });
         
         mc.on("swipeup", () => changeVideo(1));
         mc.on("swipedown", () => changeVideo(-1));
+        
+        // Chạm vào màn hình để Play/Pause (giống TikTok)
+        mc.on("tap", () => togglePlayPause());
 
-        // =====================================
-        // UI ĐIỀU KHIỂN
-        // =====================================
         function showControls() {
             document.getElementById('hiddenTrigger').style.display = 'none'; 
             document.getElementById('visibleControls').style.display = 'flex'; 
