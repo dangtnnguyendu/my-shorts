@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Shorts Clone</title>
+    <script src="danh_sach.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100vw; height: 100vh; background-color: #000; overflow: hidden; font-family: sans-serif; color: white; }
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; display: flex; justify-content: center; align-items: center; z-index: 100; cursor: pointer; }
+        #start-btn { padding: 15px 30px; font-size: 18px; border-radius: 25px; background: #ff0000; color: white; border: none; font-weight: bold; }
+        #video-container { position: relative; width: 100%; height: 100%; display: none; }
+        iframe { width: 100%; height: 100%; pointer-events: none; border: none; }
+        #touch-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        
+        /* Giao diện tên kênh */
+        #info-overlay { position: absolute; bottom: 30px; left: 20px; z-index: 20; pointer-events: none; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+        .channel-name { font-weight: bold; font-size: 20px; margin-bottom: 5px; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" onclick="startApp()">
+        <button id="start-btn">Chạm để Bắt Đầu Xem</button>
+    </div>
+
+    <div id="video-container">
+        <iframe id="yt-player" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        <div id="touch-layer"></div>
+        <div id="info-overlay">
+            <div class="channel-name" id="ui-channel">@Channel</div>
+            <div style="font-size: 14px; opacity: 0.8;">Vuốt lên để xem random ⬆️</div>
+        </div>
+    </div>
+
+    <script>
+        const videoContainer = document.getElementById('video-container');
+        const startScreen = document.getElementById('start-screen');
+        const ytPlayer = document.getElementById('yt-player');
+        const touchLayer = document.getElementById('touch-layer');
+        const uiChannel = document.getElementById('ui-channel');
+        
+        let daXem = [];
+
+        function startApp() {
+            startScreen.style.display = 'none';
+            videoContainer.style.display = 'block';
+            nextVideo();
+        }
+
+        function nextVideo() {
+            // Lấy danh sách các tên kênh (["MrBeast", "Zhong", ...])
+            const danhSachKenh = Object.keys(KHO_VIDEO);
+            if (danhSachKenh.length === 0) return;
+
+            // 1. Chọn ngẫu nhiên 1 Kênh
+            const randomKenh = danhSachKenh[Math.floor(Math.random() * danhSachKenh.length)];
+            const listVideoCuaKenh = KHO_VIDEO[randomKenh];
+
+            // 2. Lọc các video chưa xem của kênh đó
+            let videoChuaXem = listVideoCuaKenh.filter(id => !daXem.includes(id));
+            
+            if (videoChuaXem.length === 0) {
+                // Nếu đã cày nát kênh này rồi thì reset lịch sử xem
+                daXem = [];
+                videoChuaXem = listVideoCuaKenh;
+            }
+
+            // 3. Chọn ngẫu nhiên 1 Video
+            const randomId = videoChuaXem[Math.floor(Math.random() * videoChuaXem.length)];
+            daXem.push(randomId);
+
+            // Cập nhật giao diện và phát video
+            uiChannel.innerText = '@' + randomKenh;
+            ytPlayer.src = `https://www.youtube.com/embed/${randomId}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${randomId}&playsinline=1`;
+        }
+
+        // --- XỬ LÝ VUỐT (SWIPE) ---
+        let startY = 0; let endY = 0;
+        touchLayer.addEventListener('touchstart', e => { startY = e.changedTouches[0].screenY; });
+        touchLayer.addEventListener('touchend', e => { endY = e.changedTouches[0].screenY; handleSwipe(); });
+        
+        let isMouseDown = false;
+        touchLayer.addEventListener('mousedown', e => { isMouseDown = true; startY = e.screenY; });
+        touchLayer.addEventListener('mouseup', e => { if (!isMouseDown) return; isMouseDown = false; endY = e.screenY; handleSwipe(); });
+
+        function handleSwipe() {
+            const swipeDistance = startY - endY;
+            if (swipeDistance > 50 || swipeDistance < -50) {
+                nextVideo();
+            }
+        }
+    </script>
+</body>
+</html>
